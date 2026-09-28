@@ -2,6 +2,8 @@
 
 Teleprompter instalável para iPad, com ajuste de velocidade e tamanho do texto.
 
+**Aplicativo:** https://brunoscotton.github.io/teleprompt/
+
 ## Instalar no iPad
 
 1. Abra o endereço do aplicativo no Safari.
