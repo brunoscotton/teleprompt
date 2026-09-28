@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#080a0d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Teleprompter">
+  <meta name="description" content="Teleprompter simples, instalável e disponível offline.">
+  <title>Teleprompter Offline</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-180.png">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23080a0d'/%3E%3Cpath d='M13 17h38v25H35l-9 8v-8H13z' fill='%23ff5a36'/%3E%3Cpath d='M20 25h24M20 32h17' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #080a0d;
+      --panel: rgba(18, 21, 27, .94);
+      --panel-2: #171b22;
+      --text: #f7f7f4;
+      --muted: #a6abb5;
+      --accent: #ff5a36;
+      --accent-2: #ff795c;
+      --border: rgba(255, 255, 255, .11);
+      --font-size: 56px;
+      --safe-top: max(12px, env(safe-area-inset-top));
+      --safe-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button, textarea, input { font: inherit; }
+    button { -webkit-user-select: none; user-select: none; }
+
+    .app {
+      height: 100dvh;
+      min-height: 100%;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background:
+        radial-gradient(circle at 50% -20%, rgba(255, 90, 54, .11), transparent 36%),
+        var(--bg);
+    }
+
+    .toolbar {
+      z-index: 10;
+      display: grid;
+      grid-template-columns: auto minmax(145px, 1fr) minmax(145px, 1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: var(--safe-top) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      transition: transform .25s ease, opacity .25s ease;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      font-size: 15px;
+      font-weight: 750;
+      letter-spacing: -.01em;
+      white-space: nowrap;
+    }
+
+    .brand-mark {
+      width: 29px;
+      height: 23px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background: var(--accent);
+      color: white;
+      font-size: 13px;
+      box-shadow: 0 6px 18px rgba(255, 90, 54, .25);
+    }
+
+    .control {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: auto minmax(70px, 1fr) 48px;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .control label {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .value {
+      color: var(--text);
+      font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .actions { display: flex; gap: 8px; }
+
+    .icon-button, .primary-button, .text-button {
+      min-height: 44px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+
+    .icon-button {
+      width: 44px;
+      padding: 0;
+      display: grid;
+      place-items: center;
+      font-size: 19px;
+    }
+
+    .icon-button:active, .primary-button:active, .text-button:active { transform: scale(.96); }
+    button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(255, 90, 54, .45); outline-offset: 2px; }
+
+    .stage {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .reader {
+      position: absolute;
+      inset: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .reader::-webkit-scrollbar { display: none; }
+
+    .script {
+      width: min(92%, 1100px);
+      margin: 0 auto;
+      padding: 34vh 3vw 60vh;
+      color: var(--text);
+      font-size: var(--font-size);
+      font-weight: 650;
+      line-height: 1.38;
+      letter-spacing: -.025em;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      text-wrap: pretty;
+      transition: transform .2s ease;
+    }
+
+    .mirror .script { transform: scaleX(-1); }
+
+    .guide {
+      position: absolute;
+      left: max(10px, env(safe-area-inset-left));
+      right: max(10px, env(safe-area-inset-right));
+      top: 43%;
+      height: 0;
+      border-top: 1px solid rgba(255, 90, 54, .7);
+      pointer-events: none;
+      opacity: .7;
+    }
+
+    .guide::before, .guide::after {
+      content: "";
+      position: absolute;
+      top: -6px;
+      width: 11px;
+      height: 11px;
+      background: var(--accent);
+      transform: rotate(45deg);
+    }
+
+    .guide::before { left: -5px; }
+    .guide::after { right: -5px; }
+
+    .transport {
+      position: absolute;
+      z-index: 6;
+      left: 50%;
+      bottom: calc(var(--safe-bottom) + 8px);
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 17px;
+      background: rgba(18, 21, 27, .91);
+      box-shadow: 0 14px 38px rgba(0, 0, 0, .38);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      transition: opacity .25s ease;
+    }
+
+    .primary-button {
+      min-width: 132px;
+      padding: 0 20px;
+      border-color: transparent;
+      background: var(--accent);
+      color: white;
+      font-weight: 780;
+      box-shadow: 0 7px 22px rgba(255, 90, 54, .27);
+    }
+
+    .primary-button:hover { background: var(--accent-2); }
+    .text-button { padding: 0 14px; color: var(--muted); font-weight: 650; }
+
+    .editor {
+      position: absolute;
+      z-index: 20;
+      inset: 0;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      background: #0d1015;
+      transition: opacity .2s ease, visibility .2s ease;
+    }
+
+    .editor[hidden] { display: none; }
+
+    .editor-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: var(--safe-top) max(18px, env(safe-area-inset-right)) 12px max(18px, env(safe-area-inset-left));
+      border-bottom: 1px solid var(--border);
+    }
+
+    .editor-title { margin: 0; font-size: 19px; }
+    .editor-actions { display: flex; gap: 9px; }
+
+    .save-button {
+      min-height: 44px;
+      padding: 0 19px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: white;
+      font-weight: 780;
+      cursor: pointer;
+    }
+
+    textarea {
+      width: 100%;
+      height: 100%;
+      resize: none;
+      border: 0;
+      padding: clamp(22px, 5vw, 62px) max(22px, calc((100vw - 980px) / 2));
+      background: transparent;
+      color: var(--text);
+      font-size: clamp(20px, 3vw, 30px);
+      line-height: 1.55;
+      outline: none;
+    }
+
+    textarea::placeholder { color: #6f7580; }
+
+    .empty-hint {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 30px;
+      text-align: center;
+      color: var(--muted);
+      pointer-events: none;
+      font-size: 18px;
+    }
+
+    .empty-hint[hidden] { display: none; }
+
+    .install-tip {
+      position: fixed;
+      z-index: 40;
+      right: max(14px, env(safe-area-inset-right));
+      bottom: calc(var(--safe-bottom) + 78px);
+      width: min(360px, calc(100vw - 28px));
+      padding: 16px 48px 16px 17px;
+      border: 1px solid rgba(255, 255, 255, .14);
+      border-radius: 16px;
+      background: rgba(28, 32, 40, .97);
+      color: var(--text);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .install-tip strong { display: block; margin-bottom: 3px; }
+    .install-tip[hidden] { display: none; }
+
+    .tip-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 21px;
+      cursor: pointer;
+    }
+
+    .playing .toolbar { transform: translateY(-105%); opacity: 0; pointer-events: none; }
+    .playing .transport { opacity: .22; }
+    .playing .transport:hover, .playing .transport:focus-within { opacity: 1; }
+
+    @media (max-width: 780px) {
+      .toolbar {
+        grid-template-columns: 1fr auto;
+        gap: 10px 12px;
+      }
+      .brand { display: none; }
+      .control { grid-template-columns: 68px minmax(75px, 1fr) 44px; }
+      .actions { grid-row: 1 / span 2; grid-column: 2; }
+      .script { width: 94%; padding-left: 1vw; padding-right: 1vw; }
+    }
+
+    @media (max-width: 460px) {
+      .toolbar { grid-template-columns: 1fr auto; }
+      .control { grid-template-columns: 58px minmax(60px, 1fr) 40px; gap: 6px; }
+      .control label, .value { font-size: 12px; }
+      .actions .mirror-button { display: none; }
+      .primary-button { min-width: 112px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="toolbar" aria-label="Controles do teleprompter">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">▶</span> Teleprompter</div>
+
+      <div class="control">
+        <label for="speed">Velocidade</label>
+        <input id="speed" type="range" min="5" max="140" step="1" value="42" aria-label="Velocidade da rolagem">
+        <span class="value" id="speedValue">42</span>
+      </div>
+
+      <div class="control">
+        <label for="fontSize">Texto</label>
+        <input id="fontSize" type="range" min="28" max="112" step="2" value="56" aria-label="Tamanho da letra">
+        <span class="value" id="fontValue">56</span>
+      </div>
+
+      <div class="actions">
+        <button class="icon-button mirror-button" id="mirrorButton" type="button" title="Espelhar texto" aria-label="Espelhar texto">↔</button>
+        <button class="icon-button" id="editButton" type="button" title="Editar texto" aria-label="Editar texto">✎</button>
+        <button class="icon-button" id="fullscreenButton" type="button" title="Tela cheia" aria-label="Ativar tela cheia">⛶</button>
+      </div>
+    </header>
+
+    <section class="stage" aria-label="Área de leitura">
+      <div class="reader" id="reader" tabindex="0" aria-label="Texto do teleprompter">
+        <article class="script" id="script"></article>
+      </div>
+      <div class="guide" aria-hidden="true"></div>
+      <div class="empty-hint" id="emptyHint" hidden>Toque no lápis para inserir seu texto.</div>
+
+      <nav class="transport" aria-label="Controles de reprodução">
+        <button class="text-button" id="restartButton" type="button">Reiniciar</button>
+        <button class="primary-button" id="playButton" type="button">▶ Iniciar</button>
+      </nav>
+    </section>
+
+    <section class="editor" id="editor" aria-label="Editor de texto" hidden>
+      <header class="editor-header">
+        <h1 class="editor-title">Seu texto</h1>
+        <div class="editor-actions">
+          <button class="text-button" id="cancelButton" type="button">Cancelar</button>
+          <button class="save-button" id="saveButton" type="button">Usar no teleprompter</button>
+        </div>
+      </header>
+      <textarea id="textInput" spellcheck="true" autocapitalize="sentences" placeholder="Cole ou digite aqui o texto que você quer apresentar..."></textarea>
+    </section>
+
+    <aside class="install-tip" id="installTip" hidden>
+      <button class="tip-close" id="tipClose" type="button" aria-label="Fechar aviso">×</button>
+      <strong>Instale no iPad</strong>
+      No Safari, toque em Compartilhar e depois em “Adicionar à Tela de Início”.
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const STORAGE_KEY = 'teleprompter-offline-v1';
+      const DEFAULT_TEXT = `Olá! Este é o seu teleprompter offline.\n\nToque no lápis para colocar o seu próprio texto.\n\nAjuste a velocidade e o tamanho da letra nos controles acima. Depois, toque em Iniciar.\n\nDurante a leitura, toque em qualquer lugar da tela ou pressione a barra de espaço para pausar.`;
+
+      const app = document.getElementById('app');
+      const reader = document.getElementById('reader');
+      const script = document.getElementById('script');
+      const editor = document.getElementById('editor');
+      const textInput = document.getElementById('textInput');
+      const emptyHint = document.getElementById('emptyHint');
+      const speed = document.getElementById('speed');
+      const fontSize = document.getElementById('fontSize');
+      const speedValue = document.getElementById('speedValue');
+      const fontValue = document.getElementById('fontValue');
+      const playButton = document.getElementById('playButton');
+      const restartButton = document.getElementById('restartButton');
+      const editButton = document.getElementById('editButton');
+      const mirrorButton = document.getElementById('mirrorButton');
+      const fullscreenButton = document.getElementById('fullscreenButton');
+      const saveButton = document.getElementById('saveButton');
+      const cancelButton = document.getElementById('cancelButton');
+      const installTip = document.getElementById('installTip');
+      const tipClose = document.getElementById('tipClose');
+
+      let state = {
+        text: DEFAULT_TEXT,
+        speed: 42,
+        fontSize: 56,
+        mirrored: false
+      };
+      let playing = false;
+      let animationId = 0;
+      let lastFrame = 0;
+
+      function loadState() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+          if (saved && typeof saved === 'object') state = { ...state, ...saved };
+        } catch (_) {}
+      }
+
+      function persist() {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+      }
+
+      function render() {
+        script.textContent = state.text;
+        textInput.value = state.text;
+        speed.value = state.speed;
+        fontSize.value = state.fontSize;
+        speedValue.textContent = state.speed;
+        fontValue.textContent = state.fontSize;
+        document.documentElement.style.setProperty('--font-size', `${state.fontSize}px`);
+        reader.classList.toggle('mirror', state.mirrored);
+        mirrorButton.setAttribute('aria-pressed', String(state.mirrored));
+        mirrorButton.style.borderColor = state.mirrored ? 'var(--accent)' : '';
+        emptyHint.hidden = Boolean(state.text.trim());
+      }
+
+      function setPlaying(next) {
+        playing = next && Boolean(state.text.trim());
+        app.classList.toggle('playing', playing);
+        playButton.textContent = playing ? 'Ⅱ Pausar' : '▶ Iniciar';
+        playButton.setAttribute('aria-label', playing ? 'Pausar rolagem' : 'Iniciar rolagem');
+        cancelAnimationFrame(animationId);
+        lastFrame = performance.now();
+        if (playing) animationId = requestAnimationFrame(tick);
+      }
+
+      function tick(now) {
+        if (!playing) return;
+        const elapsed = Math.min(50, now - lastFrame);
+        lastFrame = now;
+        reader.scrollTop += (Number(state.speed) * elapsed) / 1000;
+
+        const reachedEnd = reader.scrollTop + reader.clientHeight >= reader.scrollHeight - 2;
+        if (reachedEnd) {
+          setPlaying(false);
+          playButton.textContent = '✓ Fim';
+          return;
+        }
+        animationId = requestAnimationFrame(tick);
+      }
+
+      function openEditor() {
+        setPlaying(false);
+        textInput.value = state.text;
+        editor.hidden = false;
+        setTimeout(() => textInput.focus(), 50);
+      }
+
+      function closeEditor(save) {
+        if (save) {
+          state.text = textInput.value.trim();
+          persist();
+          render();
+          reader.scrollTop = 0;
+        }
+        editor.hidden = true;
+        editButton.focus();
+      }
+
+      speed.addEventListener('input', () => {
+        state.speed = Number(speed.value);
+        speedValue.textContent = state.speed;
+        persist();
+      });
+
+      fontSize.addEventListener('input', () => {
+        state.fontSize = Number(fontSize.value);
+        fontValue.textContent = state.fontSize;
+        document.documentElement.style.setProperty('--font-size', `${state.fontSize}px`);
+        persist();
+      });
+
+      playButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setPlaying(!playing);
+      });
+
+      restartButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        setPlaying(false);
+        reader.scrollTo({ top: 0, behavior: 'smooth' });
+        playButton.textContent = '▶ Iniciar';
+      });
+
+      editButton.addEventListener('click', openEditor);
+      saveButton.addEventListener('click', () => closeEditor(true));
+      cancelButton.addEventListener('click', () => closeEditor(false));
+
+      mirrorButton.addEventListener('click', () => {
+        state.mirrored = !state.mirrored;
+        persist();
+        render();
+      });
+
+      fullscreenButton.addEventListener('click', async () => {
+        try {
+          if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+          else await document.exitFullscreen();
+        } catch (_) {
+          alert('No iPad, use Compartilhar → Adicionar à Tela de Início para abrir em tela cheia.');
+        }
+      });
+
+      reader.addEventListener('click', () => {
+        if (playing) setPlaying(false);
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (!editor.hidden) {
+          if (event.key === 'Escape') closeEditor(false);
+          return;
+        }
+        if (event.code === 'Space') {
+          event.preventDefault();
+          setPlaying(!playing);
+        } else if (event.key === 'ArrowUp') {
+          reader.scrollBy({ top: -80, behavior: 'smooth' });
+        } else if (event.key === 'ArrowDown') {
+          reader.scrollBy({ top: 80, behavior: 'smooth' });
+        }
+      });
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) setPlaying(false);
+      });
+
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      const isAppleMobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isAppleMobile && !isStandalone && localStorage.getItem('teleprompter-install-tip') !== 'closed') {
+        installTip.hidden = false;
+      }
+
+      tipClose.addEventListener('click', () => {
+        installTip.hidden = true;
+        localStorage.setItem('teleprompter-install-tip', 'closed');
+      });
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').catch(() => {});
+        });
+      }
+
+      loadState();
+      render();
+    })();
+  </script>
+</body>
+</html>
